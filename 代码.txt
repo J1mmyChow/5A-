@@ -1,0 +1,111 @@
+##UI.R
+
+ui <- dashboardPage( dashboardHeader(title = "Welcome to 5A SPOT !!!"), 
+                     dashboardSidebar( sidebarMenu( 
+   menuItem("Assessment year",tabName = "dashboard1", icon = icon( "bar-chart-o")),
+   
+   menuItem("Ticket price", tabName = "dashboard2", icon = icon( "list-alt")),
+   
+   menuItem("Regional occupation ratio of 5A scenic spots", tabName = "dashboard3", icon = icon( "th")),
+   
+   menuItem("The distribution on the map", tabName = "dashboard4", icon = icon( "table")),
+   
+    menuItem("Interactive map", tabName = "dashboard5", icon = icon( "cog")) ) ), 
+   
+dashboardBody( tabItems(tabItem(tabName = "dashboard1", fluidRow( box( title = "", 
+           plotOutput( "plot1", width= 600, height= 400), width = 10) ) ), 
+               
+    tabItem(tabName = "dashboard2", fluidRow( box( title = "", 
+           plotOutput( "plot2", width= 600, height= 400), width = 10) ) ), 
+              
+    tabItem(tabName = "dashboard3", fluidRow( box( title = "", 
+            plotOutput( "plot3", width= 600, height= 400), width = 10) ) ), 
+    
+    tabItem(tabName = "dashboard4", fluidRow( box( title = "", 
+            plotOutput( "plot4", width= 1000, height= 800), width = 10) ) ), 
+    
+    tabItem(tabName = "dashboard5", fluidRow( box( title = "", 
+          leafletOutput( "plot5", width = "100%", height = 1000), width = 12) ) ))
+     ) )
+
+##server.r
+server<-shinyServer(function(input, output) { 
+  
+  output$plot1 <- renderPlot({ hist(mydata$Time,freq=T,col='red',xlab="Year of evaluation",ylab="Number of scenic spots",
+                              main="5A Scenic spot evaluated year") }) 
+  
+  output$plot2 <- renderPlot({dotchart(mydata$ticket,cex=.7,main='Ticket price of scenic spots',xlab='Ticket Price')}) 
+  
+  output$plot3 <- renderPlot({pie3D(slices,radius=0.8,labels=lbls2,explode=0.1,main="Regional occupation ratio")}) 
+  
+  output$plot4 <- renderPlot({ ggplot()+ geom_polygon(data=china_map,aes(x=long,y=lat,group=group),col="grey60",
+                              fill="white",size=.5,alpha=.5)+geom_point(data=mydata,aes(x=long,y=lat,
+                     shape=Class,fill=Class),size=4,colour="white")+ coord_map("polyconic") + scale_shape_manual(values=c(21,22,23,24,21,22))+ scale_fill_wsj()+labs(title="Distribution map of 5A scenic spots",caption="Data sources: China Natinal Tourism Administration")+ theme_void(base_size=15) %+replace% theme( plot.title=element_text(size=25,hjust=0), 
+                    plot.caption=element_text(hjust=0), legend.position = c(0.05,0.75), 
+                   plot.margin = unit(c(1,0,1,0), "cm") ) }) 
+  
+  output$plot5 <- renderLeaflet({leaflet(china_map)%>%amap()%>%addPolygons(stroke = FALSE)%>% addMarkers(data=mydata,lng=~long,lat=~lat,popup=~label)
+    })})
+
+shinyApp(ui,server)
+
+
+###事先要运行的文件
+
+#########
+library("xlsx")
+library("lubridate")
+library("ggplot2")
+library("plyr")
+library("RColorBrewer")
+library("dplyr")
+library("maptools")
+library("ggthemes")
+library("leafletCN")
+library("leaflet")
+library("htmltools")
+library("shiny")
+library("shinydashboard")
+library("rgdal")
+library(plotrix)
+mydata<-read.xlsx("D:/5Aspot.xlsx",sheetName="Sheet1",header=T,encoding='UTF-8',stringsAsFactors=FALSE,check.names=FALSE)
+ncol(mydata)
+nrow(mydata)
+
+##做评定年份条形图 plot1
+# hist(mydata$Time,freq=T,col='red',xlab="评定年份",ylab="景点数目",main="5A景点的评定年份")
+
+##票价的点图 
+# dotchart(mydata$ticket,cex=.7,main='Ticket price of scenic spots',xlab='Ticket Price')
+
+##评价的脸谱图 
+# library(aplpack)
+# class<-cbind(mydata$scenery,mydata$interest,mydata$`cost performance`)
+# dev.new()
+
+##做华南,华北,华东等的饼图
+
+levels(mydata$region)
+slices<-c(63,32,51,18,16,37,31)
+lbls<-c("East China","South China","North China","Central China","Northeast","Southwest","Northwest")
+pct<-round(slices/sum(slices)*100)
+lbls2<-paste(lbls,pct,"%",seq='')
+# dev.new()
+# pie3D(slices,radius=0.8,labels=lbls2,explode=0.1,main="Regional occupation ratio")
+
+
+##景点分布图
+china_map <- readOGR("D:/healthmap/bou2_4p.shp",stringsAsFactors=FALSE) 
+# ggplot()+ geom_polygon(data=china_map,aes(x=long,y=lat,group=group),col="grey60",
+#                        fill="white",size=.5,alpha=.5)+geom_point(data=mydata,aes(x=long,y=lat,
+#                                                                                  shape=Class,fill=Class),size=2,colour="white")+ coord_map("polyconic") + 
+#   scale_shape_manual(values=c(21,22,23,24,21,22))+ scale_fill_wsj()+
+#   labs(title="Distribution map of 5A scenic spots",caption="Data sources: China Natinal Tourism Administration")+ 
+#   theme_void(base_size=15) %+replace% theme( plot.title=element_text(size=25,hjust=0), 
+#                                              plot.caption=element_text(hjust=0), legend.position = c(0.05,0.75), 
+#                                              plot.margin = unit(c(1,0,1,0), "cm") )
+
+##基于景点的动态图
+for(i in 1:nrow(mydata)){ mydata$label[i]=sprintf(paste("<b><a href='%s'>%s</a></b>","<p>%s</p>","<p>%s</p>","<p><img src='%s' width='300'></p>",sep="<br/>"), mydata$link[i],mydata$Name[i],mydata$Class[i],mydata$Information[i],mydata$img_link[i])}
+# leaflet(china_map)%>%amap()%>%addPolygons(stroke = FALSE)%>%addMarkers(data=mydata,lng=~long,lat=~lat,popup=~label)
+
